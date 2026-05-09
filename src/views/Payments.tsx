@@ -23,9 +23,9 @@ export default function Payments() {
     nextDueDate: format(new Date(), 'yyyy-MM-dd')
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addPayment({
+    await addPayment({
       name: formData.name,
       amount: parseFloat(formData.amount),
       category: formData.category,
@@ -172,7 +172,7 @@ export default function Payments() {
                 <div className="text-right flex flex-col items-end gap-3">
                   <p className="text-lg font-black text-white tabular-nums">{userProfile?.currency}{p.amount.toLocaleString()}</p>
                   <button 
-                    onClick={() => markPaymentAsPaid(p.id)}
+                    onClick={async () => await markPaymentAsPaid(p.id)}
                     className="px-3 py-1.5 bg-emerald-500 text-slate-900 hover:bg-emerald-400 rounded text-[9px] font-black uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
                   >
                     PAGAR AHORA

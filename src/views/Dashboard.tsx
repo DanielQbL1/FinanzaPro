@@ -92,7 +92,7 @@ export default function Dashboard() {
         <div className="absolute right-0 top-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl -mr-32 -mt-32 transition-colors duration-1000 group-hover:bg-emerald-500/10"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">¡Hola de nuevo, {userProfile?.fullName.split(' ')[0]}!</h1>
+            <h1 className="text-3xl font-bold text-white tracking-tight">¡Hola de nuevo, {userProfile?.fullName?.split(' ')[0] || 'Usuario'}!</h1>
             <p className="text-slate-400 mt-2 font-medium">Aquí tienes el resumen de tu actividad financiera para {format(now, 'MMMM', { locale: es })}.</p>
           </div>
           <div className="flex items-center gap-3 bg-slate-950/50 p-4 rounded-2xl border border-slate-800 backdrop-blur-sm shadow-inner">

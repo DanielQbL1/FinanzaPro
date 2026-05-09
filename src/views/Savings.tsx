@@ -18,9 +18,9 @@ export default function Savings() {
 
   const [contributeAmount, setContributeAmount] = useState<Record<string, string>>({});
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    addSaving({
+    await addSaving({
       name,
       targetAmount: parseFloat(targetAmount),
       currentAmount: 0,
@@ -32,10 +32,10 @@ export default function Savings() {
     setShowForm(false);
   };
 
-  const handleContribute = (id: string) => {
+  const handleContribute = async (id: string) => {
     const amount = parseFloat(contributeAmount[id] || '0');
     if (amount > 0) {
-      updateSaving(id, amount);
+      await updateSaving(id, amount);
       setContributeAmount({ ...contributeAmount, [id]: '' });
     }
   };

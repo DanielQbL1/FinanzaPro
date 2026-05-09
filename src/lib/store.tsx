@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AppData, Transaction, RecurringPayment, Budget, SavingGoal, User } from '../types';
+import { Transaction, RecurringPayment, Budget, SavingGoal, User } from '../types';
+import { supabase } from './supabase';
+import { Session } from '@supabase/supabase-js';
 
 interface FinanceContextType {
   currentUser: string | null;
@@ -8,214 +10,285 @@ interface FinanceContextType {
   payments: RecurringPayment[];
   budgets: Budget[];
   savings: SavingGoal[];
-  login: (username: string, password: string) => boolean;
-  register: (user: User, password: string) => boolean;
-  logout: () => void;
-  addTransaction: (t: Omit<Transaction, 'id'>) => void;
-  deleteTransaction: (id: string) => void;
-  addPayment: (p: Omit<RecurringPayment, 'id' | 'isPaid' | 'history'>) => void;
-  markPaymentAsPaid: (id: string) => void;
-  setBudget: (b: Budget) => void;
-  updateSaving: (id: string, amount: number) => void;
-  addSaving: (s: Omit<SavingGoal, 'id'>) => void;
-  exportData: () => string;
-  importData: (json: string) => void;
-  resetData: () => void;
-  updateProfile: (updatedUser: Partial<User>) => void;
+  loading: boolean;
+  dbError: string | null;
+  login: (email: string, password: string) => Promise<{ error: any }>;
+  register: (email: string, password: string, profile: Partial<User>) => Promise<{ error: any }>;
+  logout: () => Promise<void>;
+  addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  addPayment: (p: Omit<RecurringPayment, 'id' | 'isPaid' | 'history'>) => Promise<void>;
+  markPaymentAsPaid: (id: string) => Promise<void>;
+  setBudget: (b: Omit<Budget, 'id'>) => Promise<void>;
+  updateSaving: (id: string, amount: number) => Promise<void>;
+  addSaving: (s: Omit<SavingGoal, 'id'>) => Promise<void>;
+  updateProfile: (updatedUser: Partial<User>) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const INITIAL_DATA: AppData = {
-  users: {},
-  profiles: {},
-  transactions: {},
-  recurringPayments: {},
-  budgets: {},
-  savings: {}
-};
-
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<AppData>(() => {
-    const saved = localStorage.getItem('finanzapro_data');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
-  });
-
-  const [currentUser, setCurrentUser] = useState<string | null>(() => {
-    return localStorage.getItem('finanzapro_user');
-  });
-
-  useEffect(() => {
-    localStorage.setItem('finanzapro_data', JSON.stringify(data));
-  }, [data]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [payments, setPayments] = useState<RecurringPayment[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [savings, setSavings] = useState<SavingGoal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('finanzapro_user', currentUser);
-    } else {
-      localStorage.removeItem('finanzapro_user');
-    }
-  }, [currentUser]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchAllData(session.user.id);
+      else setLoading(false);
+    });
 
-  const login = (username: string, password: string) => {
-    if (data.users[username] === password) {
-      setCurrentUser(username);
-      return true;
-    }
-    return false;
-  };
-
-  const register = (user: User, password: string) => {
-    if (data.users[user.username]) return false;
-    setData(prev => ({
-      ...prev,
-      users: { ...prev.users, [user.username]: password },
-      profiles: { ...prev.profiles, [user.username]: user },
-      transactions: { ...prev.transactions, [user.username]: [] },
-      recurringPayments: { ...prev.recurringPayments, [user.username]: [] },
-      budgets: { ...prev.budgets, [user.username]: [] },
-      savings: { ...prev.savings, [user.username]: [] }
-    }));
-    setCurrentUser(user.username);
-    return true;
-  };
-
-  const logout = () => setCurrentUser(null);
-
-  const addTransaction = (t: Omit<Transaction, 'id'>) => {
-    if (!currentUser) return;
-    const newT: Transaction = { ...t, id: crypto.randomUUID() };
-    setData(prev => ({
-      ...prev,
-      transactions: {
-        ...prev.transactions,
-        [currentUser]: [newT, ...(prev.transactions[currentUser] || [])]
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchAllData(session.user.id);
+      else {
+        setUserProfile(null);
+        setTransactions([]);
+        setPayments([]);
+        setBudgets([]);
+        setSavings([]);
+        setLoading(false);
       }
-    }));
-  };
+    });
 
-  const deleteTransaction = (id: string) => {
-    if (!currentUser) return;
-    setData(prev => ({
-      ...prev,
-      transactions: {
-        ...prev.transactions,
-        [currentUser]: prev.transactions[currentUser].filter(t => t.id !== id)
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchAllData = async (userId: string) => {
+    setLoading(true);
+    setDbError(null);
+    try {
+      const [profileRes, transRes, payRes, budRes, savRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false }),
+        supabase.from('recurring_payments').select('*').eq('user_id', userId),
+        supabase.from('budgets').select('*').eq('user_id', userId),
+        supabase.from('savings').select('*').eq('user_id', userId)
+      ]);
+
+      if (profileRes.error && profileRes.error.code === '42P01') {
+        setDbError('DATABASE_NOT_INITIALIZED');
+        return;
       }
-    }));
-  };
 
-  const addPayment = (p: Omit<RecurringPayment, 'id' | 'isPaid' | 'history'>) => {
-    if (!currentUser) return;
-    const newP: RecurringPayment = { ...p, id: crypto.randomUUID(), isPaid: false, history: [] };
-    setData(prev => ({
-      ...prev,
-      recurringPayments: {
-        ...prev.recurringPayments,
-        [currentUser]: [...(prev.recurringPayments[currentUser] || []), newP]
-      }
-    }));
-  };
-
-  const markPaymentAsPaid = (id: string) => {
-    if (!currentUser) return;
-    setData(prev => {
-      const userPayments = prev.recurringPayments[currentUser] || [];
-      const updated = userPayments.map(p => {
-        if (p.id === id) {
-          // Generate transaction
-          const t: Transaction = {
-            id: crypto.randomUUID(),
-            amount: p.amount,
-            category: p.category,
-            date: new Date().toISOString(),
-            type: 'expense',
-            description: `Pago recurrente: ${p.name}`
-          };
-          return { ...p, isPaid: true, history: [...p.history, t.id] };
-        }
-        return p;
-      });
-
-      // Also add to transactions
-      const target = userPayments.find(p => p.id === id);
-      const newTransactions = [...(prev.transactions[currentUser] || [])];
-      if (target) {
-        newTransactions.unshift({
-           id: crypto.randomUUID(),
-           amount: target.amount,
-           category: target.category,
-           date: new Date().toISOString(),
-           type: 'expense',
-           description: `Pago recurrente: ${target.name}`
+      if (profileRes.data) {
+        setUserProfile({
+          fullName: profileRes.data.full_name,
+          username: profileRes.data.email || '', // map email to username field for compatibility
+          currency: profileRes.data.currency,
+          theme: profileRes.data.theme
         });
       }
-
-      return {
-        ...prev,
-        recurringPayments: { ...prev.recurringPayments, [currentUser]: updated },
-        transactions: { ...prev.transactions, [currentUser]: newTransactions }
-      };
-    });
-  };
-
-  const setBudget = (b: Budget) => {
-    if (!currentUser) return;
-    setData(prev => {
-      const filtered = (prev.budgets[currentUser] || []).filter(
-        item => !(item.category === b.category && item.month === b.month)
-      );
-      return {
-        ...prev,
-        budgets: { ...prev.budgets, [currentUser]: [...filtered, b] }
-      };
-    });
-  };
-
-  const addSaving = (s: Omit<SavingGoal, 'id'>) => {
-     if (!currentUser) return;
-     const newS = { ...s, id: crypto.randomUUID() };
-     setData(prev => ({
-       ...prev,
-       savings: { ...prev.savings, [currentUser]: [...(prev.savings[currentUser] || []), newS] }
-     }));
-  };
-
-  const updateSaving = (id: string, amount: number) => {
-    if (!currentUser) return;
-    setData(prev => ({
-      ...prev,
-      savings: {
-        ...prev.savings,
-        [currentUser]: (prev.savings[currentUser] || []).map(s => 
-          s.id === id ? { ...s, currentAmount: s.currentAmount + amount } : s
-        )
+      
+      if (transRes.data) setTransactions(transRes.data);
+      
+      if (payRes.data) {
+        setPayments(payRes.data.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          amount: p.amount,
+          category: p.category,
+          frequency: p.frequency,
+          startDate: p.start_date || p.created_at,
+          nextDueDate: p.due_date,
+          isPaid: p.is_paid,
+          history: [] // history not yet implemented in DB
+        })));
       }
-    }));
+      
+      if (budRes.data) setBudgets(budRes.data);
+      
+      if (savRes.data) {
+        setSavings(savRes.data.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          targetAmount: s.target_amount,
+          currentAmount: s.current_amount,
+          deadline: s.deadline
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const exportData = () => JSON.stringify(data);
-  const importData = (json: string) => setData(JSON.parse(json));
-  const resetData = () => setData(INITIAL_DATA);
+  const login = async (email: string, password: string) => {
+    const response = await supabase.auth.signInWithPassword({ email, password });
+    return { error: response.error };
+  };
 
-  const updateProfile = (updatedUser: Partial<User>) => {
-    if (!currentUser) return;
-    setData(prev => ({
-      ...prev,
-      profiles: {
-        ...prev.profiles,
-        [currentUser]: { ...prev.profiles[currentUser], ...updatedUser }
+  const register = async (email: string, password: string, profile: Partial<User>) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error };
+    
+    if (data.user) {
+      const { error: profileError } = await supabase.from('profiles').insert([
+        { 
+          id: data.user.id, 
+          full_name: profile.fullName,
+          currency: profile.currency,
+          theme: profile.theme
+        }
+      ]);
+      if (profileError) return { error: profileError };
+    }
+    return { error: null };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const addTransaction = async (t: Omit<Transaction, 'id'>) => {
+    if (!session) return;
+    const { data, error } = await supabase.from('transactions').insert([
+      { ...t, user_id: session.user.id }
+    ]).select().single();
+    
+    if (!error && data) {
+      setTransactions(prev => [data, ...prev]);
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (!error) {
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    }
+  };
+
+  const addPayment = async (p: Omit<RecurringPayment, 'id' | 'isPaid' | 'history'>) => {
+    if (!session) return;
+    const { data, error } = await supabase.from('recurring_payments').insert([
+      { 
+        user_id: session.user.id,
+        name: p.name,
+        amount: p.amount,
+        category: p.category,
+        frequency: p.frequency,
+        due_date: p.nextDueDate,
+        is_paid: false
       }
-    }));
+    ]).select().single();
+    
+    if (!error && data) {
+      setPayments(prev => [...prev, {
+        id: data.id,
+        name: data.name,
+        amount: data.amount,
+        category: data.category,
+        frequency: data.frequency,
+        startDate: data.start_date || data.created_at,
+        nextDueDate: data.due_date,
+        isPaid: data.is_paid,
+        history: []
+      }]);
+    }
+  };
+
+  const markPaymentAsPaid = async (id: string) => {
+    const target = payments.find(p => p.id === id);
+    if (!target || !session) return;
+
+    const { error: payError } = await supabase.from('recurring_payments').update({ is_paid: true }).eq('id', id);
+    if (payError) return;
+
+    // Add transaction record
+    await addTransaction({
+      amount: target.amount,
+      category: target.category,
+      date: new Date().toISOString(),
+      type: 'expense',
+      description: `Pago recurrente: ${target.name}`
+    });
+
+    setPayments(prev => prev.map(p => p.id === id ? { ...p, isPaid: true } : p));
+  };
+
+  const setBudget = async (b: Omit<Budget, 'id'>) => {
+    if (!session) return;
+    const { data, error } = await supabase.from('budgets').upsert([
+      { 
+        user_id: session.user.id,
+        category: b.category,
+        amount: b.amount,
+        month: b.month
+      }
+    ], { onConflict: 'user_id, category, month' }).select().single();
+
+    if (!error && data) {
+      setBudgets(prev => {
+        const filtered = prev.filter(item => !(item.category === b.category && item.month === b.month));
+        return [...filtered, data];
+      });
+    }
+  };
+
+  const addSaving = async (s: Omit<SavingGoal, 'id'>) => {
+    if (!session) return;
+    const { data, error } = await supabase.from('savings').insert([
+      { 
+        user_id: session.user.id,
+        name: s.name,
+        target_amount: s.targetAmount,
+        current_amount: s.currentAmount,
+        deadline: s.deadline
+      }
+    ]).select().single();
+
+    if (!error && data) {
+      setSavings(prev => [...prev, {
+        id: data.id,
+        name: data.name,
+        targetAmount: data.target_amount,
+        currentAmount: data.current_amount,
+        deadline: data.deadline
+      }]);
+    }
+  };
+
+  const updateSaving = async (id: string, amount: number) => {
+    const target = savings.find(s => s.id === id);
+    if (!target) return;
+
+    const newAmount = target.currentAmount + amount;
+    const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', id);
+
+    if (!error) {
+      setSavings(prev => prev.map(s => s.id === id ? { ...s, currentAmount: newAmount } : s));
+    }
+  };
+
+  const updateProfile = async (updatedUser: Partial<User>) => {
+    if (!session) return;
+    const updateData: any = {};
+    if (updatedUser.fullName) updateData.full_name = updatedUser.fullName;
+    if (updatedUser.currency) updateData.currency = updatedUser.currency;
+    if (updatedUser.theme) updateData.theme = updatedUser.theme;
+    
+    const { error } = await supabase.from('profiles').update({ ...updateData, updated_at: new Date() }).eq('id', session.user.id);
+    if (!error) {
+      setUserProfile(prev => prev ? { ...prev, ...updatedUser } : null);
+    }
   };
 
   const value = {
-    currentUser,
-    userProfile: currentUser ? data.profiles[currentUser] : null,
-    transactions: currentUser ? data.transactions[currentUser] || [] : [],
-    payments: currentUser ? data.recurringPayments[currentUser] || [] : [],
-    budgets: currentUser ? data.budgets[currentUser] || [] : [],
-    savings: currentUser ? data.savings[currentUser] || [] : [],
+    currentUser: session?.user.id || null,
+    userProfile,
+    transactions,
+    payments,
+    budgets,
+    savings,
+    loading,
+    dbError,
     login,
     register,
     logout,
@@ -226,9 +299,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setBudget,
     updateSaving,
     addSaving,
-    exportData,
-    importData,
-    resetData,
     updateProfile
   };
 

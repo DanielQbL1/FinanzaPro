@@ -38,9 +38,9 @@ export default function Budgets() {
     return { ...b, spent, progress };
   });
 
-  const handleSaveBudget = (e: React.FormEvent) => {
+  const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBudget({
+    await setBudget({
       category: selectedCategory,
       amount: parseFloat(amount),
       month: currentMonth

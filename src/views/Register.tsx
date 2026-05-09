@@ -9,33 +9,45 @@ import { CURRENCIES } from '../constants';
 export default function Register() {
   const [formData, setFormData] = useState({
     fullName: '',
-    username: '',
+    email: '',
     password: '',
     confirmPassword: '',
     currency: '$'
   });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { register } = useFinance();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Las contraseñas no coinciden');
       return;
     }
 
-    const newUser: User = {
+    if (formData.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
+
+    const profile: Partial<User> = {
       fullName: formData.fullName,
-      username: formData.username,
       currency: formData.currency,
       theme: 'dark'
     };
 
-    if (register(newUser, formData.password)) {
+    const { error: regError } = await register(formData.email, formData.password, profile);
+    
+    if (!regError) {
       navigate('/');
     } else {
-      setError('El nombre de usuario ya existe');
+      setError(regError.message || 'Error al crear la cuenta');
+      setLoading(false);
     }
   };
 
@@ -67,22 +79,22 @@ export default function Register() {
                 value={formData.fullName}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-3.5 pl-10 pr-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all font-medium placeholder:text-slate-600 shadow-inner"
-                placeholder="Tu nombre"
+                placeholder="Tu nombre completo"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-300 mb-2 ml-1">Nombre de Usuario</label>
+            <label className="block text-sm font-semibold text-slate-300 mb-2 ml-1">Correo Electrónico</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
-                type="text"
+                type="email"
                 required
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-3.5 pl-10 pr-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all font-medium placeholder:text-slate-600 shadow-inner"
-                placeholder="Ej. juan.perez"
+                placeholder="ejemplo@correo.com"
               />
             </div>
           </div>
@@ -99,6 +111,7 @@ export default function Register() {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-3.5 pl-10 pr-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all font-medium placeholder:text-slate-600 shadow-inner"
                   placeholder="••••"
+                  minLength={6}
                 />
               </div>
             </div>
@@ -140,9 +153,10 @@ export default function Register() {
 
           <button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98] mt-4 text-lg"
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98] mt-4 text-lg"
           >
-            Crear Mi Cuenta
+            {loading ? 'Creando cuenta...' : 'Crear Mi Cuenta'}
           </button>
         </form>
 

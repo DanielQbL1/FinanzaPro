@@ -117,7 +117,7 @@ export default function HistoryView() {
                     </td>
                     <td className="px-8 py-5">
                       <button
-                        onClick={() => deleteTransaction(t.id)}
+                        onClick={async () => await deleteTransaction(t.id)}
                         className="p-2.5 text-slate-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-xl transition-all shadow-sm active:scale-90"
                         title="Eliminar Registro"
                       >

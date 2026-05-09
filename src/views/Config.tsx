@@ -31,14 +31,14 @@ export default function Config() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
         try {
           const json = ev.target?.result as string;
-          importData(json);
+          await importData(json);
           setImportStatus('success');
           setTimeout(() => setImportStatus('idle'), 3000);
         } catch (err) {
@@ -101,7 +101,7 @@ export default function Config() {
                 <label className="block text-[9px] font-black text-slate-600 uppercase tracking-widest mb-2">Divisa de Muestra</label>
                 <select 
                   value={userProfile?.currency}
-                  onChange={(e) => updateProfile({ currency: e.target.value })}
+                  onChange={async (e) => await updateProfile({ currency: e.target.value })}
                   className="bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-lg font-black text-sm text-emerald-500 w-fit min-w-[120px] text-center cursor-pointer outline-none focus:border-emerald-500/50 transition-all appearance-none"
                 >
                   {CURRENCIES.map(curr => (
@@ -197,7 +197,7 @@ export default function Config() {
               <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-10 leading-relaxed italic opacity-70">Esta acción destruirá todos los datos de FinanzaPro de forma definitiva.</p>
               <div className="flex flex-col gap-2">
                 <button 
-                  onClick={() => { resetData(); setShowConfirmReset(false); }}
+                  onClick={async () => { await resetData(); setShowConfirmReset(false); }}
                   className="w-full py-4 bg-rose-600 text-white font-black rounded hover:bg-rose-500 transition-all text-xs uppercase tracking-widest shadow-xl"
                 >
                   EJECUTAR BORRADO

@@ -24,9 +24,9 @@ export default function Transactions() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addTransaction({
+    await addTransaction({
       amount: parseFloat(amount),
       category,
       description,

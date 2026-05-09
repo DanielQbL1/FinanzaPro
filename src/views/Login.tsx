@@ -5,18 +5,23 @@ import { TrendingUp, Lock, User as UserIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useFinance();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(username, password)) {
+    setLoading(true);
+    setError('');
+    const { error } = await login(email, password);
+    if (!error) {
       navigate('/');
     } else {
-      setError('Usuario o contraseña incorrectos');
+      setError(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos' : error.message);
+      setLoading(false);
     }
   };
 
@@ -39,16 +44,16 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-slate-300 mb-2 ml-1">Nombre de Usuario</label>
+            <label className="block text-sm font-semibold text-slate-300 mb-2 ml-1">Correo Electrónico</label>
             <div className="relative">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
               <input
-                type="text"
+                type="email"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-3.5 pl-10 pr-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all font-medium placeholder:text-slate-600 shadow-inner"
-                placeholder="Tu usuario"
+                placeholder="ejemplo@correo.com"
               />
             </div>
           </div>
@@ -72,9 +77,10 @@ export default function Login() {
 
           <button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98] text-lg"
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98] text-lg"
           >
-            Iniciar Sesión
+            {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
         </form>
 
