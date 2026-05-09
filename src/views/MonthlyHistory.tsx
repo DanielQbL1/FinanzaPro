@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { useFinance } from '../lib/store.tsx';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, PieChart as PieIcon, Wallet, Activity, Calendar } from 'lucide-react';
 import { 

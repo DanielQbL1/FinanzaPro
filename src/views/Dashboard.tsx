@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { useFinance } from '../lib/store.tsx';
 import { 
   TrendingUp, 
@@ -7,7 +9,9 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Clock,
-  Target
+  Target,
+  PieChart as PieIcon,
+  PlusCircle
 } from 'lucide-react';
 import { 
   BarChart, 

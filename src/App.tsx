@@ -130,7 +130,7 @@ function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (o: boolea
   );
 }
 
-function SidebarLink({ item, active, setIsOpen }: { item: any, active: boolean, setIsOpen: (o: boolean) => void }) {
+const SidebarLink: React.FC<{ item: any; active: boolean; setIsOpen: (o: boolean) => void }> = ({ item, active, setIsOpen }) => {
   return (
     <Link
       to={item.path}
