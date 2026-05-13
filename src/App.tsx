@@ -225,8 +225,8 @@ function LoadingScreen() {
 }
 
 function DatabaseSetupGuide() {
-  const sql = `-- Profiles table
-create table profiles (
+  const sql = `-- 1. Tablas Principales (con IF NOT EXISTS para evitar errores)
+create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   full_name text,
   currency text default '$',
@@ -234,8 +234,7 @@ create table profiles (
   updated_at timestamp with time zone default now()
 );
 
--- Transactions table
-create table transactions (
+create table if not exists public.transactions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   amount numeric not null,
@@ -246,8 +245,7 @@ create table transactions (
   created_at timestamp with time zone default now()
 );
 
--- Recurring Payments table
-create table recurring_payments (
+create table if not exists public.recurring_payments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   name text not null,
@@ -259,8 +257,7 @@ create table recurring_payments (
   created_at timestamp with time zone default now()
 );
 
--- Budgets table
-create table budgets (
+create table if not exists public.budgets (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   category text not null,
@@ -270,8 +267,7 @@ create table budgets (
   unique(user_id, category, month)
 );
 
--- Savings table
-create table savings (
+create table if not exists public.savings (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   name text not null,
@@ -282,22 +278,52 @@ create table savings (
   created_at timestamp with time zone default now()
 );
 
--- Enable RLS
-alter table profiles enable row level security;
-alter table transactions enable row level security;
-alter table recurring_payments enable row level security;
-alter table budgets enable row level security;
-alter table savings enable row level security;
+-- 2. Habilitar Seguridad (RLS)
+alter table public.profiles enable row level security;
+alter table public.transactions enable row level security;
+alter table public.recurring_payments enable row level security;
+alter table public.budgets enable row level security;
+alter table public.savings enable row level security;
 
--- Policies
-create policy "Users can see their own profile" on profiles for select using (auth.uid() = id);
-create policy "Users can update their own profile" on profiles for update using (auth.uid() = id);
-create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = id);
+-- 3. Políticas de Seguridad (con comprobación de existencia)
+do $$ 
+begin
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own profile') then
+    create policy "Users can manage their own profile" on public.profiles for all using (auth.uid() = id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own transactions') then
+    create policy "Users can manage their own transactions" on public.transactions for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own recurring payments') then
+    create policy "Users can manage their own recurring payments" on public.recurring_payments for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own budgets') then
+    create policy "Users can manage their own budgets" on public.budgets for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own savings') then
+    create policy "Users can manage their own savings" on public.savings for all using (auth.uid() = user_id);
+  end if;
+end $$;
 
-create policy "Users can manage their own transactions" on transactions for all using (auth.uid() = user_id);
-create policy "Users can manage their own recurring payments" on recurring_payments for all using (auth.uid() = user_id);
-create policy "Users can manage their own budgets" on budgets for all using (auth.uid() = user_id);
-create policy "Users can manage their own savings" on savings for all using (auth.uid() = user_id);`;
+-- 4. Función y Trigger para creación automática de perfil
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, full_name, currency, theme)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', 'Usuario'),
+    coalesce(new.raw_user_meta_data->>'currency', '$'),
+    coalesce(new.raw_user_meta_data->>'theme', 'dark')
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();`;
 
   return (
     <div className="min-h-screen bg-slate-950 p-6 flex items-center justify-center">
@@ -307,8 +333,8 @@ create policy "Users can manage their own savings" on savings for all using (aut
             <Settings className="text-amber-500 w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Configuración de Base de Datos Necesaria</h1>
-            <p className="text-slate-400">Las tablas de Supabase aún no han sido creadas.</p>
+            <h1 className="text-2xl font-bold text-white">Configuración de Supabase</h1>
+            <p className="text-slate-400">Sigue estos pasos para activar tu base de datos y evitar errores de registro.</p>
           </div>
         </div>
 
@@ -316,7 +342,21 @@ create policy "Users can manage their own savings" on savings for all using (aut
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
             <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <span className="w-6 h-6 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center text-sm">1</span>
-              Copia este código SQL
+              Ajustes de Autenticación
+            </h2>
+            <p className="text-slate-400 text-sm mb-4">
+              En tu dashboard de Supabase ve a <b>Authentication › Settings › Email Auth</b>:
+            </p>
+            <ul className="text-slate-400 text-xs space-y-2 list-disc list-inside">
+              <li><b>Enable Email Signup:</b> Mantener ACTIVADO.</li>
+              <li><b>Confirm email:</b> DESACTIVAR (esto quita la verificación).</li>
+            </ul>
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <span className="w-6 h-6 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center text-sm">2</span>
+              Copia y corre este SQL
             </h2>
             <div className="relative group">
                <pre className="bg-black/50 p-4 rounded-xl text-slate-400 text-xs overflow-x-auto max-h-60 custom-scrollbar font-mono">
@@ -324,21 +364,19 @@ create policy "Users can manage their own savings" on savings for all using (aut
               </pre>
               <button 
                 onClick={() => navigator.clipboard.writeText(sql)}
-                className="absolute top-2 right-2 p-2 bg-emerald-500 rounded-lg text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs"
+                className="absolute top-2 right-2 px-3 py-1.5 bg-emerald-500 rounded-lg text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-[10px] uppercase tracking-wider"
               >
-                Copiar
+                Copiar SQL
               </button>
             </div>
+            <p className="text-slate-500 text-[10px] mt-4 italic">* Es importante incluir el <b>Trigger</b> al final para que el registro funcione correctamente.</p>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <span className="w-6 h-6 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center text-sm">2</span>
-              Pégalo en Supabase
+             <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center text-sm">3</span>
+              Enlace al Panel
             </h2>
-            <p className="text-slate-400 text-sm mb-4">
-              Ve al <b>SQL Editor</b> en tu panel de Supabase, crea una "New Query", pega el código y haz clic en <b>Run</b>.
-            </p>
             <a 
               href="https://app.supabase.com/" 
               target="_blank" 
@@ -351,9 +389,9 @@ create policy "Users can manage their own savings" on savings for all using (aut
           
           <button 
             onClick={() => window.location.reload()}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98]"
           >
-            Ya lo hice, recargar página
+            Ya configuré todo, entrar ahora
           </button>
         </div>
       </div>

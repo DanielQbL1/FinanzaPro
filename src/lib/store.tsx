@@ -86,13 +86,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
       
-      if (transRes.data) setTransactions(transRes.data);
+      if (transRes.data) setTransactions(transRes.data.map((t: any) => ({
+        ...t,
+        amount: Number(t.amount)
+      })));
       
       if (payRes.data) {
         setPayments(payRes.data.map((p: any) => ({
           id: p.id,
           name: p.name,
-          amount: p.amount,
+          amount: Number(p.amount),
           category: p.category,
           frequency: p.frequency,
           startDate: p.start_date || p.created_at,
@@ -102,14 +105,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         })));
       }
       
-      if (budRes.data) setBudgets(budRes.data);
+      if (budRes.data) setBudgets(budRes.data.map((b: any) => ({
+        ...b,
+        amount: Number(b.amount)
+      })));
       
       if (savRes.data) {
         setSavings(savRes.data.map((s: any) => ({
           id: s.id,
           name: s.name,
-          targetAmount: s.target_amount,
-          currentAmount: s.current_amount,
+          targetAmount: Number(s.target_amount),
+          currentAmount: Number(s.current_amount),
           deadline: s.deadline
         })));
       }
@@ -126,20 +132,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (email: string, password: string, profile: Partial<User>) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error };
-    
-    if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').insert([
-        { 
-          id: data.user.id, 
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
           full_name: profile.fullName,
-          currency: profile.currency,
-          theme: profile.theme
+          currency: profile.currency || '$',
+          theme: profile.theme || 'dark'
         }
-      ]);
-      if (profileError) return { error: profileError };
-    }
+      }
+    });
+
+    if (error) return { error };
     return { error: null };
   };
 

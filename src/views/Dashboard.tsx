@@ -35,44 +35,60 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export default function Dashboard() {
-  const { transactions, payments, budgets, userProfile } = useFinance();
+  const { transactions, payments, budgets, userProfile, loading } = useFinance();
 
   const now = new Date();
   const currentMonthStart = startOfMonth(now);
   const currentMonthEnd = endOfMonth(now);
-  const lastMonthStart = startOfMonth(subMonths(now, 1));
-  const lastMonthEnd = endOfMonth(subMonths(now, 1));
 
-  const currentMonthTransactions = transactions.filter(t => 
-    isWithinInterval(new Date(t.date), { start: currentMonthStart, end: currentMonthEnd })
-  );
+  // Parse date safely to avoid timezone shifts for YYYY-MM-DD
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    // If it's YYYY-MM-DD, append time to force local interpretation in most browsers
+    if (dateStr.length === 10) return new Date(dateStr + 'T12:00:00');
+    return new Date(dateStr);
+  };
 
-  const lastMonthTransactions = transactions.filter(t => 
-    isWithinInterval(new Date(t.date), { start: lastMonthStart, end: lastMonthEnd })
-  );
+  const currentMonthTransactions = transactions.filter(t => {
+    const d = parseSafeDate(t.date);
+    return isWithinInterval(d, { start: currentMonthStart, end: currentMonthEnd });
+  });
 
   const calculateStats = (ts: typeof transactions) => {
-    const income = ts.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const expenses = ts.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const income = ts.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const expenses = ts.filter(t => t.type === 'expense').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     return { income, expenses, balance: income - expenses };
   };
 
   const currentStats = calculateStats(currentMonthTransactions);
-  const lastStats = calculateStats(lastMonthTransactions);
 
   const totalBalance = transactions.reduce((acc, t) => 
-    t.type === 'income' ? acc + t.amount : acc - t.amount, 0
+    t.type === 'income' ? acc + (Number(t.amount) || 0) : acc - (Number(t.amount) || 0), 0
   );
+
+  // Last 7 days data for a more dynamic chart
+  const last7Days = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const label = format(d, 'dd MMM', { locale: es });
+    const dayStart = new Date(d.setHours(0,0,0,0));
+    const dayEnd = new Date(d.setHours(23,59,59,999));
+    
+    const dayTransactions = transactions.filter(t => {
+      const dt = parseSafeDate(t.date);
+      return dt >= dayStart && dt <= dayEnd;
+    });
+
+    const income = dayTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+    const expenses = dayTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+
+    return { name: label, ingresos: income, gastos: expenses };
+  });
 
   const nextPayments = payments
     .filter(p => !p.isPaid)
     .sort((a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime())
     .slice(0, 5);
-
-  const chartData = [
-    { name: 'Ingresos', value: currentStats.income, color: '#10b981' },
-    { name: 'Gastos', value: currentStats.expenses, color: '#f43f5e' } // rose-500
-  ];
 
   const categoryData = Object.entries(
     currentMonthTransactions
@@ -84,6 +100,15 @@ export default function Dashboard() {
   ).map(([name, value]) => ({ name, value }));
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Cargando Tablero...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-10">
@@ -219,19 +244,17 @@ export default function Dashboard() {
           </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} barGap={16}>
+              <BarChart data={last7Days} barGap={8}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${userProfile?.currency}${v}`} />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${userProfile?.currency}${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
                 <Tooltip 
                   cursor={{ fill: '#020617', opacity: 0.5 }}
-                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '16px', padding: '12px', fontSize: '14px', fontWeight: 'bold' }}
+                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '16px', padding: '12px', fontSize: '10px', fontWeight: 'bold', color: '#fff' }}
+                  itemStyle={{ fontSize: '10px', padding: '2px 0' }}
                 />
-                <Bar dataKey="value" radius={[10, 10, 0, 0]} barSize={64}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
+                <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24} />
+                <Bar dataKey="gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>

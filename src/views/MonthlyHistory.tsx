@@ -34,17 +34,25 @@ export default function MonthlyHistory() {
   const prevMonthStart = startOfMonth(subMonths(selectedDate, 1));
   const prevMonthEnd = endOfMonth(subMonths(selectedDate, 1));
 
-  const currentMonthTransactions = transactions.filter(t => 
-    isWithinInterval(new Date(t.date), { start: currentMonthStart, end: currentMonthEnd })
-  );
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    if (dateStr.length === 10) return new Date(dateStr + 'T12:00:00');
+    return new Date(dateStr);
+  };
 
-  const prevMonthTransactions = transactions.filter(t => 
-    isWithinInterval(new Date(t.date), { start: prevMonthStart, end: prevMonthEnd })
-  );
+  const currentMonthTransactions = transactions.filter(t => {
+    const d = parseSafeDate(t.date);
+    return isWithinInterval(d, { start: currentMonthStart, end: currentMonthEnd });
+  });
+
+  const prevMonthTransactions = transactions.filter(t => {
+    const d = parseSafeDate(t.date);
+    return isWithinInterval(d, { start: prevMonthStart, end: prevMonthEnd });
+  });
 
   const getStats = (ts: typeof transactions) => {
-    const income = ts.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const expenses = ts.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+    const income = ts.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const expenses = ts.filter(t => t.type === 'expense').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     return { income, expenses, balance: income - expenses };
   };
 
@@ -80,9 +88,10 @@ export default function MonthlyHistory() {
   }).map(month => {
     const start = startOfMonth(month);
     const end = endOfMonth(month);
-    const monthTs = transactions.filter(t => 
-      isWithinInterval(new Date(t.date), { start, end })
-    );
+    const monthTs = transactions.filter(t => {
+      const dt = parseSafeDate(t.date);
+      return isWithinInterval(dt, { start, end });
+    });
     const { income, expenses } = getStats(monthTs);
     return {
       month: format(month, 'MMM', { locale: es }),

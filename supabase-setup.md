@@ -1,14 +1,16 @@
 # Supabase Schema Setup
 
-1. **Desactivar Verificación de Correo**: 
-   En tu panel de Supabase, ve a **Authentication** > **Settings** > **Email Auth** y desactiva la opción **Confirm email**. Esto permite que los usuarios entren directamente tras registrarse.
+1. **Configuración de Autenticación**: 
+   En tu panel de Supabase, ve a **Authentication** > **Settings** > **Email Auth**:
+   - Asegúrate de que **Enable Email Signup** esté **ACTIVADO** (en verde).
+   - Desactiva la opción **Confirm email** (en gris). Esto permitirá crear cuentas al instante.
 
 2. **Ejecutar SQL**:
-   Corre el siguiente código en el **SQL Editor** de Supabase para crear las tablas y políticas de seguridad.
+   Corre el siguiente código en el **SQL Editor** de Supabase. Este código usa `IF NOT EXISTS` para que no te dé error si ya habías creado las tablas.
 
 ```sql
--- Profiles table
-create table profiles (
+-- 1. Tablas principales (con seguridad contra errores de existencia)
+create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   full_name text,
   currency text default '$',
@@ -16,8 +18,7 @@ create table profiles (
   updated_at timestamp with time zone default now()
 );
 
--- Transactions table
-create table transactions (
+create table if not exists public.transactions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   amount numeric not null,
@@ -28,8 +29,7 @@ create table transactions (
   created_at timestamp with time zone default now()
 );
 
--- Recurring Payments table
-create table recurring_payments (
+create table if not exists public.recurring_payments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   name text not null,
@@ -41,8 +41,7 @@ create table recurring_payments (
   created_at timestamp with time zone default now()
 );
 
--- Budgets table
-create table budgets (
+create table if not exists public.budgets (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   category text not null,
@@ -52,8 +51,7 @@ create table budgets (
   unique(user_id, category, month)
 );
 
--- Savings table
-create table savings (
+create table if not exists public.savings (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
   name text not null,
@@ -64,20 +62,50 @@ create table savings (
   created_at timestamp with time zone default now()
 );
 
--- Enable RLS
-alter table profiles enable row level security;
-alter table transactions enable row level security;
-alter table recurring_payments enable row level security;
-alter table budgets enable row level security;
-alter table savings enable row level security;
+-- 2. Habilitar Seguridad (RLS)
+alter table public.profiles enable row level security;
+alter table public.transactions enable row level security;
+alter table public.recurring_payments enable row level security;
+alter table public.budgets enable row level security;
+alter table public.savings enable row level security;
 
--- Policies
-create policy "Users can see their own profile" on profiles for select using (auth.uid() = id);
-create policy "Users can update their own profile" on profiles for update using (auth.uid() = id);
-create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = id);
+-- 3. Políticas de acceso (con comprobación para evitar errores)
+do $$ 
+begin
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own profile') then
+    create policy "Users can manage their own profile" on public.profiles for all using (auth.uid() = id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own transactions') then
+    create policy "Users can manage their own transactions" on public.transactions for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own recurring payments') then
+    create policy "Users can manage their own recurring payments" on public.recurring_payments for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own budgets') then
+    create policy "Users can manage their own budgets" on public.budgets for all using (auth.uid() = user_id);
+  end if;
+  if not exists (select 1 from pg_policies where policyname = 'Users can manage their own savings') then
+    create policy "Users can manage their own savings" on public.savings for all using (auth.uid() = user_id);
+  end if;
+end $$;
 
-create policy "Users can manage their own transactions" on transactions for all using (auth.uid() = user_id);
-create policy "Users can manage their own recurring payments" on recurring_payments for all using (auth.uid() = user_id);
-create policy "Users can manage their own budgets" on budgets for all using (auth.uid() = user_id);
-create policy "Users can manage their own savings" on savings for all using (auth.uid() = user_id);
+-- 4. Función y Trigger para creación automática de perfil
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, full_name, currency, theme)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', 'Usuario'),
+    coalesce(new.raw_user_meta_data->>'currency', '$'),
+    coalesce(new.raw_user_meta_data->>'theme', 'dark')
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
 ```

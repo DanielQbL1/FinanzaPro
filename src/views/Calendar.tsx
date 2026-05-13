@@ -36,8 +36,14 @@ export default function CalendarView() {
     end: calendarEnd
   });
 
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    if (dateStr.length === 10) return new Date(dateStr + 'T12:00:00');
+    return new Date(dateStr);
+  };
+
   const getPaymentsForDay = (day: Date) => {
-    return payments.filter(p => isSameDay(new Date(p.nextDueDate), day));
+    return payments.filter(p => isSameDay(parseSafeDate(p.nextDueDate), day));
   };
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());

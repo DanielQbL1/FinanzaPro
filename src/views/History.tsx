@@ -12,6 +12,12 @@ export default function HistoryView() {
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
 
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    if (dateStr.length === 10) return new Date(dateStr + 'T12:00:00');
+    return new Date(dateStr);
+  };
+
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           t.category.toLowerCase().includes(searchTerm.toLowerCase());
@@ -98,7 +104,7 @@ export default function HistoryView() {
                   >
                     <td className="px-8 py-5 whitespace-nowrap">
                       <div className="text-sm font-bold text-slate-300">
-                        {format(new Date(t.date), 'dd MMM, yyyy', { locale: es })}
+                        {format(parseSafeDate(t.date), 'dd MMM, yyyy', { locale: es })}
                       </div>
                     </td>
                     <td className="px-8 py-5">
