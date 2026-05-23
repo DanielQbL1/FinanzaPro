@@ -4,6 +4,16 @@ import { PiggyBank, Target, Plus, TrendingUp, ArrowRight, Trash2 } from 'lucide-
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
+} from 'recharts';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -119,6 +129,111 @@ export default function Savings() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visualización comparativa con Recharts */}
+      {savings.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl backdrop-blur-sm ring-1 ring-white/5"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Target className="text-emerald-500" />
+                Progreso y Cumplimiento de Capital
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Análisis gráfico comparativo del capital actual frente al capital objetivo de cada meta
+              </p>
+            </div>
+            
+            {/* Tarjeta de Resumen Global */}
+            <div className="flex items-center gap-6 p-4 bg-slate-950 border border-slate-800/80 rounded-2xl text-xs font-bold uppercase tracking-wider">
+              <div>
+                <span className="text-slate-500 block text-[9px] mb-1">Total Guardado</span>
+                <span className="text-emerald-500 text-sm font-black tabular-nums">
+                  {userProfile?.currency || '$'}{savings.reduce((acc, s) => acc + s.currentAmount, 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="w-[1px] h-8 bg-slate-800" />
+              <div>
+                <span className="text-slate-500 block text-[9px] mb-1">Objetivo Global</span>
+                <span className="text-slate-300 text-sm font-black tabular-nums">
+                  {userProfile?.currency || '$'}{savings.reduce((acc, s) => acc + s.targetAmount, 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="w-[1px] h-8 bg-slate-800" />
+              <div>
+                <span className="text-slate-500 block text-[9px] mb-1">Logrado</span>
+                <span className="text-emerald-400 text-sm font-black tabular-nums">
+                  {(() => {
+                    const totalTarget = savings.reduce((acc, s) => acc + s.targetAmount, 0);
+                    const totalCurrent = savings.reduce((acc, s) => acc + s.currentAmount, 0);
+                    return totalTarget > 0 ? `${((totalCurrent / totalTarget) * 100).toFixed(1)}%` : '0%';
+                  })()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-80 w-full mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={savings.map(s => ({
+                  name: s.name,
+                  'Capital Actual': s.currentAmount,
+                  'Capital Objetivo': s.targetAmount
+                }))} 
+                margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                barGap={8}
+                barCategoryGap={24}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#64748b" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tick={{ fill: '#94a3b8', fontWeight: 600 }}
+                />
+                <YAxis 
+                  stroke="#64748b" 
+                  fontSize={11} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tickFormatter={(v) => `${userProfile?.currency || '$'}${v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`}
+                  tick={{ fill: '#94a3b8', fontWeight: 600 }}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#1e293b', opacity: 0.2 }}
+                  contentStyle={{ 
+                    backgroundColor: '#0f172a', 
+                    border: '1px solid #334155', 
+                    borderRadius: '16px', 
+                    padding: '12px', 
+                    fontSize: '11px', 
+                    fontWeight: 'bold', 
+                    color: '#fff',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+                  }}
+                  itemStyle={{ fontSize: '11px', padding: '2px 0' }}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  height={36} 
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingBottom: '10px' }}
+                />
+                <Bar name="Capital Actual" dataKey="Capital Actual" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar name="Capital Objetivo" dataKey="Capital Objetivo" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {savings.map((goal, idx) => {

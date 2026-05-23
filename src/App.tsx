@@ -387,12 +387,23 @@ create trigger on_auth_user_created
             </a>
           </div>
           
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98]"
-          >
-            Ya configuré todo, entrar ahora
-          </button>
+          <div className="space-y-3">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all shadow-xl transform active:scale-[0.98]"
+            >
+              Ya configuré todo, entrar ahora
+            </button>
+            <button 
+              onClick={() => {
+                localStorage.setItem('is_local_mode_forced', 'true');
+                window.location.reload();
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 rounded-xl transition-all border border-slate-700 shadow-md transform active:scale-[0.98]"
+            >
+              Probar en Modo Local (Guardar en Navegador)
+            </button>
+          </div>
         </div>
       </div>
     </div>
