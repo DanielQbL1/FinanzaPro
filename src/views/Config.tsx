@@ -28,7 +28,7 @@ export default function Config() {
     userProfile, 
     updateProfile, 
     currentUser,
-    exportData = () => JSON.stringify({}),
+    exportData = async () => JSON.stringify({}),
     importData = async () => {},
     resetData = async () => {}
   } = useFinance() as any;
@@ -43,15 +43,19 @@ export default function Config() {
   );
   const [prefs, setPrefs] = useState(() => loadNotificationPrefs(currentUser || ''));
 
-  const handleExport = () => {
-    const data = exportData();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `finanzapro_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      const data = await exportData();
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `finanzapro_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +190,7 @@ export default function Config() {
                     <span className="text-slate-500 mb-1 block">MÉTODO DE ALMACENAMIENTO DE DATOS ACTIVO</span>
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span className="text-white text-xs lowercase first-letter:uppercase">Conectado en la Nube con Supabase Database</span>
+                      <span className="text-white text-xs lowercase first-letter:uppercase">Conectado de forma segura con la Base de Datos</span>
                     </div>
                   </div>
                 </div>

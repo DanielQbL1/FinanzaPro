@@ -122,7 +122,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         supabase.from('savings').select('*').eq('user_id', userId)
       ]);
 
-      if (profileRes.error && profileRes.error.code === '42P01') {
+      if (
+        (profileRes.error && profileRes.error.code === '42P01') ||
+        (transRes.error && transRes.error.code === '42P01') ||
+        (payRes.error && payRes.error.code === '42P01') ||
+        (budRes.error && budRes.error.code === '42P01') ||
+        (savRes.error && savRes.error.code === '42P01')
+      ) {
         setDbError('DATABASE_NOT_INITIALIZED');
         return;
       }
@@ -214,6 +220,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await supabase.auth.signInWithPassword({ email, password });
+      if (!response.error && response.data?.session) {
+        setSession(response.data.session);
+        await fetchAllData(response.data.session.user.id);
+      }
       return { error: response.error };
     } catch (err: any) {
       return { error: err };
@@ -252,6 +262,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         if (profileError) {
           console.warn("Proactive profile creation failed, falling back to dynamic on-demand generation inside fetchAllData:", profileError);
         }
+
+        // Wait for data load so screen shows when fully configured
+        if (data.session) {
+          setSession(data.session);
+        }
+        await fetchAllData(userId);
       }
       
       return { error: null };
@@ -410,16 +426,85 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const exportData = () => {
-    const backupObj = {
-      transactions,
-      payments,
-      budgets,
-      savings,
-      userProfile,
-      version: '1.0.0'
-    };
-    return JSON.stringify(backupObj, null, 2);
+  const exportData = async (): Promise<string> => {
+    if (!session?.user?.id) return JSON.stringify({ error: "Sujeto no autenticado" });
+    const userId = session.user.id;
+    
+    try {
+      const [profileRes, transRes, payRes, budRes, savRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false }),
+        supabase.from('recurring_payments').select('*').eq('user_id', userId),
+        supabase.from('budgets').select('*').eq('user_id', userId),
+        supabase.from('savings').select('*').eq('user_id', userId)
+      ]);
+
+      const freshProfile = profileRes.data ? {
+        fullName: profileRes.data.full_name || 'Usuario',
+        username: session.user.email || profileRes.data.id || '',
+        currency: profileRes.data.currency || '$',
+        theme: profileRes.data.theme || 'dark'
+      } : userProfile;
+
+      const freshTransactions = transRes.data ? transRes.data.map((t: any) => ({
+        ...t,
+        amount: Number(t.amount)
+      })) : transactions;
+
+      const freshPayments = payRes.data ? payRes.data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        amount: Number(p.amount),
+        category: p.category,
+        frequency: p.frequency,
+        startDate: p.start_date || p.created_at,
+        nextDueDate: p.due_date,
+        isPaid: p.is_paid,
+        history: []
+      })) : payments;
+
+      const freshBudgets = budRes.data ? budRes.data.map((b: any) => ({
+        ...b,
+        amount: Number(b.amount)
+      })) : budgets;
+
+      const freshSavings = savRes.data ? savRes.data.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        targetAmount: Number(s.target_amount),
+        currentAmount: Number(s.current_amount),
+        deadline: s.deadline
+      })) : savings;
+
+      const backupObj = {
+        transactions: freshTransactions,
+        payments: freshPayments,
+        budgets: freshBudgets,
+        savings: freshSavings,
+        userProfile: freshProfile,
+        version: '1.0.0'
+      };
+      
+      // Sync local state as well
+      setUserProfile(freshProfile);
+      setTransactions(freshTransactions);
+      setPayments(freshPayments);
+      setBudgets(freshBudgets);
+      setSavings(freshSavings);
+
+      return JSON.stringify(backupObj, null, 2);
+    } catch (e: any) {
+      console.warn("Direct database fetch failed during export, falling back to state:", e);
+      const backupObj = {
+        transactions,
+        payments,
+        budgets,
+        savings,
+        userProfile,
+        version: '1.0.0'
+      };
+      return JSON.stringify(backupObj, null, 2);
+    }
   };
 
   const importData = async (jsonString: string) => {
