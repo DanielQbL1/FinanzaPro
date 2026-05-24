@@ -46,7 +46,18 @@ export default function Register() {
     if (!regError) {
       navigate('/');
     } else {
-      setError(regError.message || 'Error al crear la cuenta');
+      const msg = regError.message || '';
+      let displayError = msg;
+      
+      if (msg.includes('already registered') || msg.includes('User already exists')) {
+        displayError = 'Este correo electrónico ya está registrado. Intenta iniciar sesión.';
+      } else if (msg.includes('weak_password') || msg.includes('should be at least 6 characters')) {
+        displayError = 'La contraseña es demasiado débil. Debe tener al menos 6 caracteres.';
+      } else if (msg.includes('Database error') || msg.includes('profiles') || msg.includes('42P01')) {
+        displayError = 'La base de datos Supabase aún no está inicializada con las tablas y triggers correctos. Revisa las instrucciones en la pantalla principal o el archivo supabase-setup.md.';
+      }
+      
+      setError(displayError || 'Error al crear la cuenta. Inténtalo de nuevo.');
       setLoading(false);
     }
   };
@@ -60,7 +71,7 @@ export default function Register() {
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
 
-        <div className="flex flex-col items-center mb-10">
+        <div className="flex flex-col items-center mb-6">
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl mb-4 shadow-xl">
             <TrendingUp className="text-emerald-500 w-10 h-10" />
           </div>

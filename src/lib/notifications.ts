@@ -109,7 +109,12 @@ export function verifyAndNotifyBudgets(
     t.type === 'expense' && format(new Date(t.date), 'yyyy-MM') === currentMonth
   );
 
-  const notifiedKeys = JSON.parse(localStorage.getItem(`notif_keys_budgets_${userId}`) || '{}');
+  let notifiedKeys: any = {};
+  try {
+    notifiedKeys = JSON.parse(localStorage.getItem(`notif_keys_budgets_${userId}`) || '{}');
+  } catch {
+    notifiedKeys = {};
+  }
 
   budgets.forEach(b => {
     if (b.month !== currentMonth) return;
@@ -151,7 +156,12 @@ export function verifyAndNotifyPayments(
   if (!prefs.upcomingPayments) return;
 
   const now = new Date();
-  const notifiedKeys = JSON.parse(localStorage.getItem(`notif_keys_payments_${userId}`) || '{}');
+  let notifiedKeys: any = {};
+  try {
+    notifiedKeys = JSON.parse(localStorage.getItem(`notif_keys_payments_${userId}`) || '{}');
+  } catch {
+    notifiedKeys = {};
+  }
 
   payments.forEach(p => {
     if (p.isPaid) return;

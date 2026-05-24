@@ -30,8 +30,7 @@ export default function Config() {
     currentUser,
     exportData = () => JSON.stringify({}),
     importData = async () => {},
-    resetData = async () => {},
-    localModeActive
+    resetData = async () => {}
   } = useFinance() as any;
 
   const [activeTab, setActiveTab] = useState<'perfil' | 'datos' | 'notificaciones' | 'seguridad'>('perfil');
@@ -186,21 +185,10 @@ export default function Config() {
                   <div>
                     <span className="text-slate-500 mb-1 block">MÉTODO DE ALMACENAMIENTO DE DATOS ACTIVO</span>
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${localModeActive ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`}></span>
-                      <span className="text-white text-xs lowercase first-letter:uppercase">{localModeActive ? 'Modo local de navegador (offline fallback)' : 'Conectado a la base de datos Supabase'}</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-white text-xs lowercase first-letter:uppercase">Conectado en la Nube con Supabase Database</span>
                     </div>
                   </div>
-                  {localStorage.getItem('is_local_mode_forced') === 'true' && (
-                    <button 
-                      onClick={() => {
-                        localStorage.removeItem('is_local_mode_forced');
-                        window.location.reload();
-                      }}
-                      className="px-4 py-2 bg-slate-800 hover:bg-emerald-600 text-emerald-400 hover:text-slate-950 rounded text-[9px] font-black uppercase transition-all shadow shrink-0"
-                    >
-                      Reconectar a Supabase
-                    </button>
-                  )}
                 </div>
               </div>
 
